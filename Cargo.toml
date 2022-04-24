@@ -1,0 +1,29 @@
+[package]
+name = "raytracer"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+#vecmat ="0.7.7"
+roots = "0.0.7"
+image = { version = "0.24.1", default-features = false, features = ["hdr"] }
+ordered-float = "2.10.0"
+#glam = "0.20.2"
+itertools = "0.10.3"
+rand = { version = "0.8.5", features = ["small_rng"] }
+arrayvec = "0.7.2"
+rand_xorshift = "0.3.0"
+parking_lot = { git = "https://github.com/Amanieu/parking_lot/", rev = "80194730f2104fa5ca92fe17a619b57d0677ece7" }
+#beryllium = "0.7.6"
+#zstring = "0.1.3"
+#gl33 = "0.2.1"
+#glitz = {version = "0.4", features=["std"]}
+rayon = "1.5.1"
+indicatif = { version = "0.16.2", features = ["improved_unicode"] }
+rcu-clean = "0.1.6"
+cache-padded = "1.2.0"
+partition = "0.1.2"
+unordered-pair = "0.2.3"
+priority-queue = "1.2.1"

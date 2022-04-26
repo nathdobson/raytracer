@@ -4,8 +4,8 @@ use rand::{Rng, SeedableRng};
 use rand_xorshift::XorShiftRng;
 use crate::geo::axis_plane::AxisPlane;
 use crate::geo::bounds::Bounds;
+use crate::math::vec::Vec3;
 use crate::tree::kd_tree::{KdEntry, KdIter, KdNeighbor, KdQuery, KdTree};
-use crate::Vec3;
 
 #[derive(Debug, Clone)]
 pub struct BvKdEntry<T> {
@@ -73,7 +73,7 @@ mod test {
     use rand::{Rng, SeedableRng};
     use rand_xorshift::XorShiftRng;
     use crate::geo::bounds::Bounds;
-    use crate::Vec3;
+    use crate::math::vec::Vec3;
     use crate::tree::bv_kd_tree::{BvKdEntry, BvKdTree};
     use crate::tree::kd_tree::KdNeighbor;
 

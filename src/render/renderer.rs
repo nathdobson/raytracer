@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::default::default;
 use std::f64::consts::PI;
 use crate::geo::view::View;
 use std::path::Path;
@@ -13,13 +14,12 @@ use image::codecs::hdr::HdrEncoder;
 use itertools::Itertools;
 use crate::render::image::ImageBuilder;
 use crate::geo::ray::Ray;
-use crate::{Sphere};
 use crate::math::vec::{Vec2, Vec3};
 use crate::util::itertools2::Itertools2;
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng, thread_rng};
 use crate::math::mat::Mat2;
-use crate::geo::sphere::ZenithY;
+use crate::geo::sphere::{Sphere, ZenithY};
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;
@@ -41,18 +41,23 @@ pub struct Light {
     pub color: Color,
 }
 
+pub struct Scene<S> {
+    pub size: (usize, usize),
+    pub view: View,
+    pub lights: Vec<Light>,
+    pub scene_object: S,
+    pub photon_count: usize,
+    pub photon_samples: usize,
+    pub newton_steps: usize,
+    pub newton_epsilon: f64,
+}
+
 pub struct Renderer<S> {
-    view: View,
     photons: KdTree<Photon>,
-    direct: ImageBuilder,
-    indirect: ImageBuilder,
-    added: ImageBuilder,
-    removed: ImageBuilder,
+    radiosity: ImageBuilder,
     perf: ImageBuilder,
-    depth: ImageBuilder,
-    scene: S,
-    lights: Vec<Light>,
     rng: SmallRng,
+    scene: Scene<S>,
 }
 
 #[derive(Debug)]
@@ -73,8 +78,7 @@ pub struct AdjustedPhoton {
 
 #[derive(Default)]
 pub struct RenderedRay {
-    direct: Color,
-    indirect: Color,
+    radiosity: Color,
     depth: f64,
 }
 
@@ -99,24 +103,18 @@ pub struct SpecularPath<T> {
 }
 
 impl<S: Object> Renderer<S> {
-    pub fn new(view: View, size: (usize, usize), scene: S, lights: Vec<Light>) -> Self {
+    pub fn new(scene: Scene<S>) -> Self {
         Renderer {
-            view,
             photons: KdTree::default(),
-            direct: ImageBuilder::new(size),
-            indirect: ImageBuilder::new(size),
-            added: ImageBuilder::new(size),
-            removed: ImageBuilder::new(size),
-            perf: ImageBuilder::new(size),
-            depth: ImageBuilder::new(size),
+            radiosity: ImageBuilder::new(scene.size),
+            perf: ImageBuilder::new(scene.size),
             scene,
-            lights,
             rng: SmallRng::from_entropy(),
         }
     }
     pub fn render(&mut self) {
-        let photon_sources = self.lights.iter().enumerate().flat_map(|(index, light)| {
-            Sphere::fibonacci_sphere(50000000, &mut self.rng).into_iter().map(move |dir| (index, light, dir))
+        let photon_sources = self.scene.lights.iter().enumerate().flat_map(|(index, light)| {
+            Sphere::fibonacci_sphere(self.scene.photon_count, &mut self.rng).into_iter().map(move |dir| (index, light, dir))
         }).collect::<Vec<_>>();
         let photons =
             photon_sources.par_iter()
@@ -141,35 +139,34 @@ impl<S: Object> Renderer<S> {
         dbg!(photons.len());
         self.photons = KdTree::new(photons);
         let mut pixels = vec![];
-        for x in 0..self.direct.size().0 {
-            for y in 0..self.direct.size().1 {
+        for x in 0..self.scene.size.0 {
+            for y in 0..self.scene.size.1 {
                 pixels.push((x, y));
             }
         }
         let pixels = pixels.into_par_iter()
             .progress_as("raytrace")
             .map(|(x, y)| self.render_pixel(x, y)).collect::<Vec<_>>();
-        for RenderedPixel { pos: (x, y), rendered_ray: RenderedRay { direct, indirect, depth }, time } in pixels {
-            self.direct.insert(x, y, direct);
-            self.indirect.insert(x, y, indirect);
-            self.added.insert(x, y, (indirect - direct).clamp());
-            self.removed.insert(x, y, (direct - indirect).clamp());
+        for RenderedPixel { pos: (x, y), rendered_ray: RenderedRay { radiosity, depth }, time } in pixels {
+            self.radiosity.insert(x, y, radiosity);
             self.perf.insert(x, y, Color::new(1.0, 1.0, 1.0) * time.as_secs_f64() * 3000.0);
-            self.depth.insert(x, y, Color::new(1.0, 1.0, 1.0) * depth);
         }
     }
     pub fn render_pixel(&self, x: usize, y: usize) -> RenderedPixel {
         let start = Instant::now();
-        let sx = (x as f64 - (self.direct.size().0 as f64 - 1.0) / 2.0) / (self.direct.size().0 as f64);
-        let sy = -(y as f64 - (self.direct.size().1 as f64 - 1.0) / 2.0) / (self.direct.size().1 as f64);
+        let sx = (x as f64 - (self.scene.size.0 as f64 - 1.0) / 2.0) / (self.scene.size.0 as f64);
+        let sy = -(y as f64 - (self.scene.size.1 as f64 - 1.0) / 2.0) / (self.scene.size.1 as f64);
         let s = Vec2::from([sx, sy]);
 
         let rr = if true {
             self.raytrace_pixel(s)
         } else {
             RenderedRay {
-                direct: Color::default(),
-                indirect: Color::default(),
+                radiosity: if x % 2 == 0 {
+                    Color::new(1.0 + sy * 2.0, 1.0 + sy * 2.0, 1.0 + sy * 2.0) * 0.01
+                } else {
+                    Color::new(1.0 - sy * 2.0, 1.0 - sy * 2.0, 1.0 - sy * 2.0) * 0.01
+                },
                 depth: 0.0,
             }
         };
@@ -187,7 +184,7 @@ impl<S: Object> Renderer<S> {
     pub fn compute_direct_irrad(&self, p: &RaycastPoint<f64>) -> Color {
         //let mut lighting = Color::default();
         let mut lighting = Color::new(1.0, 1.0, 1.0) * 0.0;
-        for light in self.lights.iter() {
+        for light in self.scene.lights.iter() {
             let disp = light.sphere.orig() - p.position;
             let dis2 = disp.dot(disp);
             let dis = dis2.sqrt();
@@ -197,7 +194,7 @@ impl<S: Object> Renderer<S> {
                 continue;
             }
             let ray = Ray::new_bounce(p.position, dir);
-            if let Some(occlude) = self.scene.raycast(&ray, None) {
+            if let Some(occlude) = self.scene.scene_object.raycast(&ray, None) {
                 if occlude.time < dis {
                     continue;
                 }
@@ -209,13 +206,13 @@ impl<S: Object> Renderer<S> {
     pub fn compute_indirect_irrad(&self, p: &RaycastPoint<f64>) -> Color {
         let mut total = Color::default();
         let mut photons = HashMap::new();
-        for photon in self.photons.nearest(&p.position, 5) {
+        for photon in self.photons.nearest(&p.position, self.scene.photon_samples) {
             let photon = photon.entry;
             let mut dir = photon.value().dir;
             let mut filter_manifolds: Vec<_> = photon.value().manifold.iter().cloned().map(Some).collect();
             filter_manifolds.push(Some(p.manifold));
             let mut seps = vec![];
-            for _ in 0..5 {
+            for _ in 0..self.scene.newton_steps {
                 let ray = Ray::new(photon.value().origin.cast(), dir.as_input().into_normal());
                 let hit = self.raytrace_all_specular::<Der<2>>(&ray, &filter_manifolds, Some(&photon.value().modes));
                 assert!(hit.len() < 2);
@@ -250,7 +247,7 @@ impl<S: Object> Renderer<S> {
             let real_photon = self.raytrace_all_specular::<Der<2>>(&ray, &[], Some(&photon.value().modes));
             assert!(real_photon.len() < 2);
             if let Some(real_photon) = real_photon.into_iter().next() {
-                if real_photon.raycast_point.position.cast().distance(p.position) < 0.01 {
+                if real_photon.raycast_point.position.cast().distance(p.position) < self.scene.newton_epsilon {
                     photons.insert(photon.value().light_index, AdjustedPhoton {
                         light: photon.value().light,
                         position: real_photon.raycast_point.position,
@@ -267,7 +264,7 @@ impl<S: Object> Renderer<S> {
         return total;
     }
     pub fn raytrace_pixel(&self, s: Vec2<f64>) -> RenderedRay {
-        let ray = self.view.get_ray(s);
+        let ray = self.scene.view.get_ray(s);
         let mut total = Color::default();
         for path in self.raytrace_all_specular(&ray, &[], None) {
             let irrad =
@@ -279,17 +276,8 @@ impl<S: Object> Renderer<S> {
                 .map_mul(path.raycast_point.material.diffuse)
                 * path.attenuation;
         }
-        // if let Some(p) = self.scene.raycast(&ray, None) {
-        //     let ambient = self.compute_ambient_irrad(&p);
-        //     return RenderedRay {
-        //         direct: (self.compute_direct_irrad(&p) + ambient).map_mul(p.material.diffuse),
-        //         indirect: (self.compute_indirect_irrad(&p) + ambient).map_mul(p.material.diffuse),
-        //         depth: p.time,
-        //     };
-        // }
         RenderedRay {
-            direct: total,
-            indirect: total,
+            radiosity: total,
             depth: 0.0,
         }
     }
@@ -325,7 +313,7 @@ impl<S: Object> Renderer<S> {
             return;
         }
         let (filter_manifold, filter_manifolds) = slice_pop(filter_manifolds);
-        let first = self.scene.raycast(ray, filter_manifold.flatten());
+        let first = self.scene.scene_object.raycast(ray, filter_manifold.flatten());
         let first = match first {
             None => return,
             Some(first) => first,
@@ -388,36 +376,11 @@ impl<S: Object> Renderer<S> {
             }
         }
     }
-    // pub fn raytrace_one_specular<T: Scalar>(&self, mut ray: Ray<T>, manifolds: &[SpecularManifold], last: Manifold) -> Option<SpecularPath<T>> {
-    //     let mut attenuation = T::from(1.0);
-    //     for manifold in manifolds {
-    //         let hit = self.scene.raycast(&ray, Some(manifold.manifold))?;
-    //         let (n1, n2) = hit.material.dielectric?;
-    //         let dielectric = Dielectric::new(ray.dir(), hit.geo_normal, T::from(n1), T::from(n2));
-    //         match manifold.mode {
-    //             SpecularMode::Reflect => {
-    //                 ray = Ray::new_bounce(hit.position, dielectric.reflect);
-    //                 attenuation *= dielectric.reflectance;
-    //             }
-    //             SpecularMode::Refract => if let Some(refract) = dielectric.refract {
-    //                 ray = Ray::new_bounce(hit.position, refract);
-    //                 attenuation *= T::from(1.0) - dielectric.reflectance;
-    //             }
-    //         }
-    //     }
-    //     let hit = self.scene.raycast(&ray, Some(last))?;
-    //     Some(SpecularPath {
-    //         raycast_point: hit,
-    //         manifolds: manifolds.iter().cloned().collect(),
-    //         attenuation,
-    //     })
-    // }
-    pub fn write(&self, name: &str) {
-        self.direct.write(&format!("output/{}_direct.hdr", name));
-        self.indirect.write(&format!("output/{}_indirect.hdr", name));
-        self.added.write(&format!("output/{}_added.hdr", name));
-        self.removed.write(&format!("output/{}_removed.hdr", name));
-        self.perf.write(&format!("output/{}_perf.hdr", name));
-        self.depth.write(&format!("output/{}_depth.hdr", name));
+    pub fn images(&self) -> HashMap<String, Vec<u8>> {
+        let mut result = HashMap::new();
+        result.insert("image.hdr".to_string(), self.radiosity.to_hdr());
+        result.insert("image.pq.hdr".to_string(), self.radiosity.smpte2048_encode().to_hdr());
+        result.insert("perf.hdr".to_string(), self.perf.to_hdr());
+        result
     }
 }

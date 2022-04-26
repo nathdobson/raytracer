@@ -1,6 +1,6 @@
 use rand::{Rng, thread_rng};
 use crate::math::scalar::{Der, Scalar};
-use crate::{Vec2, Vec3};
+use crate::math::vec::Vec3;
 
 #[derive(Debug)]
 pub struct Dielectric<T> {

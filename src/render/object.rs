@@ -6,8 +6,7 @@ use ordered_float::NotNan;
 use crate::geo::bounds::Interval;
 use crate::geo::color::Color;
 use crate::math::scalar::Scalar;
-use crate::Vec2;
-use crate::math::vec::Vec3;
+use crate::math::vec::{Vec2, Vec3};
 use crate::render::material::Material;
 
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialOrd, PartialEq)]

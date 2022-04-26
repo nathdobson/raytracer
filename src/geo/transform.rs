@@ -5,34 +5,12 @@ use crate::math::scalar::Scalar;
 use crate::geo::ray::Ray;
 use crate::math::vec::Vec3;
 
-// #[derive(Copy, Clone, Debug)]
-// pub struct Translate(pub Vec3);
-//
-// #[derive(Copy, Clone, Debug)]
-// pub struct Scale(pub Vec3);
-
-// #[derive(Copy, Clone, Debug)]
-// pub struct Yaw(pub f64);
-//
-// #[derive(Copy, Clone, Debug)]
-// pub struct Pitch(pub f64);
-//
-// #[derive(Copy, Clone, Debug)]
-// pub struct Roll(pub f64);
-
-// #[derive(Copy, Clone, Debug)]
-// pub struct Rotate {
-//     yaw: f64,
-//     pitch: f64,
-//     roll: f64,
-// }
-
-// #[derive(Copy, Clone, Debug)]
-// pub struct TransformParts {
-//     translate: Translate,
-//     scale: Scale,
-//     rotate: Rotate,
-// }
+#[derive(Copy, Clone, Debug)]
+pub struct TransformBuilder {
+    translate: Vec3<f64>,
+    scale: Vec3<f64>,
+    rotate: (),
+}
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Transform<T> {
@@ -40,6 +18,34 @@ pub struct Transform<T> {
     forward: Mat4<T>,
     reverse_norm: Mat3<T>,
     reverse: Mat4<T>,
+}
+
+impl Default for TransformBuilder {
+    fn default() -> Self {
+        TransformBuilder {
+            translate: Vec3::default(),
+            scale: Vec3::broadcast(1.0),
+            rotate: (),
+        }
+    }
+}
+
+impl TransformBuilder {
+    pub fn new() -> Self { Self::default() }
+    pub fn scale(&mut self, amount: f64) -> &mut Self {
+        self.scale = Vec3::broadcast(amount);
+        self
+    }
+    pub fn translate(&mut self, x: f64, y: f64, z: f64) -> &mut Self {
+        self.translate = Vec3::new(x, y, z);
+        self
+    }
+    pub fn rotate(&mut self, _: ()) -> &mut Self {
+        self
+    }
+    pub fn build(&self) -> Transform<f64> {
+        Transform::from(Mat4::from_scale_rotation_translation(self.scale, self.rotate, self.translate))
+    }
 }
 
 impl<T: Scalar> From<Mat4<T>> for Transform<T> {
@@ -72,6 +78,10 @@ impl<T: Scalar> Transform<T> {
     pub fn forward_norm(&self, norm: Vec3<T>) -> Vec3<T> {
         (self.forward_norm * norm).normalize()
     }
+}
+
+impl Default for Transform<f64> {
+    fn default() -> Self { TransformBuilder::new().build() }
 }
 
 

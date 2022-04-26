@@ -7,8 +7,7 @@ use crate::geo::color::Color;
 use crate::math::mat::Mat2;
 use crate::math::scalar::{Der, Scalar};
 use crate::render::object::{Manifold, RaycastPoint};
-use crate::Vec2;
-use crate::math::vec::Vec3;
+use crate::math::vec::{Vec2, Vec3};
 use crate::render::material::Material;
 
 #[derive(Debug)]

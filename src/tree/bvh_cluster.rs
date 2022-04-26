@@ -5,7 +5,6 @@ use std::collections::{HashMap, HashSet};
 use std::collections::btree_map::Entry;
 use std::iter::{Peekable, Rev};
 use ordered_float::NotNan;
-use crate::Bvh;
 use crate::mesh::TriMesh;
 use unordered_pair::UnorderedPair;
 use crate::geo::bounds::Bounds;

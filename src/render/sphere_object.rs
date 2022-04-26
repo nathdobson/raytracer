@@ -1,8 +1,8 @@
 use roots::find_roots_quadratic;
-use crate::{Sphere, Vec3};
 use crate::geo::color::Color;
 use crate::math::scalar::Scalar;
 use crate::geo::ray::Ray;
+use crate::geo::sphere::Sphere;
 use crate::render::material::Material;
 use crate::render::object::{Manifold, Object, RaycastPoint};
 

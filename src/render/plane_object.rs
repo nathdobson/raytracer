@@ -1,8 +1,8 @@
 use crate::geo::ray::Ray;
 use crate::math::scalar::Scalar;
 use crate::render::object::{Manifold, Object, RaycastPoint};
-use crate::{Vec2, Vec3};
 use crate::geo::color::Color;
+use crate::math::vec::{Vec2, Vec3};
 use crate::render::material::Material;
 
 pub struct PlaneObject {

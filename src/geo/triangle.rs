@@ -2,8 +2,7 @@ use crate::geo::bounds::Bounds;
 use crate::geo::ray::Ray;
 use ordered_float::NotNan;
 use crate::math::scalar::Scalar;
-use crate::Vec2;
-use crate::math::vec::Vec3;
+use crate::math::vec::{Vec2, Vec3};
 
 pub struct Triangle<T> {
     vertices: [Vec3<T>; 3],

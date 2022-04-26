@@ -1,4 +1,4 @@
-use crate::Color;
+use crate::geo::color::Color;
 
 #[derive(Copy, Clone, Default, Debug)]
 pub struct Material {

@@ -3,8 +3,9 @@ extern crate test;
 use std::hint::black_box;
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
-use crate::{pinecone, Vec3};
 use crate::geo::ray::Ray;
+use crate::math::vec::Vec3;
+use crate::mesh::pinecone;
 use crate::tree::kd_tree::{KdEntry, KdTree};
 
 #[bench]

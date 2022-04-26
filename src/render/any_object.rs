@@ -3,7 +3,6 @@ use crate::geo::ray::Ray;
 use crate::render::mesh_object::MeshObject;
 use crate::render::object::{Manifold, Object, RaycastPoint};
 use crate::geo::sphere::Sphere;
-use crate::Plane;
 use crate::render::plane_object::PlaneObject;
 use crate::render::sphere_object::SphereObject;
 
